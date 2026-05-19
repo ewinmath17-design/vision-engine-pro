@@ -1,6 +1,9 @@
 import streamlit as st
 import time
-import random
+import os
+import json
+import tempfile
+import google.generativeai as genai
 
 # =====================================================================
 # CONFIGURATION & PAGE SETUP
@@ -25,15 +28,12 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     .stButton>button:hover { background-color: #1b5e20; border-color: #a1887f; }
-    .prompt-box {
+    .shot-box {
         background-color: #1e1e24;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #4CAF50;
-        margin-bottom: 15px;
-        font-family: monospace;
-        font-size: 14px;
-        color: #e0e0e0;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid #ff9800;
+        margin-bottom: 20px;
     }
     .metric-card {
         background-color: #161a22;
@@ -48,143 +48,128 @@ st.markdown("""
 # Initialize Session State
 if 'credits' not in st.session_state:
     st.session_state.credits = 500
-if 'history' not in st.session_state:
-    st.session_state.history = []
 
 # =====================================================================
-# KAMUS SINEMATOGRAFI (INJECTION ENGINE DATABASE)
+# KAMUS SINEMATOGRAFI
 # =====================================================================
 CINEMA_DATABASE = {
-    "Commercial Ads": {
-        "camera": "ARRI Alexa 65",
-        "lens": "50mm Prime Lens",
-        "lighting": "Studio high-key lighting, softboxes, pristine color grading",
-        "style": "High-end commercial, ultra-detailed, hyperrealistic"
-    },
-    "Cinematic Movie (Layar Lebar)": {
-        "camera": "RED V-Raptor",
-        "lens": "85mm Anamorphic Lens",
-        "lighting": "Chiaroscuro lighting, dramatic shadows, neon rim light",
-        "style": "Hollywood blockbuster, film grain, anamorphic flares"
-    },
-    "UGC Viral Masterpiece": {
-        "camera": "iPhone 15 Pro Max",
-        "lens": "24mm Wide",
-        "lighting": "Natural daylight, dynamic contrast",
-        "style": "TikTok viral aesthetic, raw and authentic, engaging"
-    }
+    "Commercial Ads": "Shot on ARRI Alexa 65, 50mm Prime Lens. Studio high-key lighting. High-end commercial, ultra-detailed, hyperrealistic.",
+    "Cinematic Movie": "Shot on RED V-Raptor, 85mm Anamorphic Lens. Chiaroscuro lighting, dramatic shadows. Hollywood blockbuster, film grain.",
+    "UGC Viral": "Shot on iPhone 15 Pro Max, 24mm Wide. Natural daylight, dynamic contrast. TikTok viral aesthetic, raw and authentic."
 }
 
 # =====================================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION & API AUTH
 # =====================================================================
 with st.sidebar:
     st.title("🎬 Vision Engine Pro")
-    st.caption("Structured Prompt Extractor for Kling/Luma/Veo")
+    st.caption("Auto-Storyboard & Keyframe Extractor")
     st.markdown("---")
     
+    st.markdown("### 🔑 API Authentication")
+    gemini_api_key = st.text_input("Enter Gemini API Key:", type="password")
+    
+    st.markdown("---")
     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-    st.metric(label="Sisa Kredit Prompt", value=f"{st.session_state.credits} PTS")
+    st.metric(label="Sisa Kredit API", value=f"{st.session_state.credits} PTS")
     st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("---")
-    menu = st.radio("Navigasi Fitur:", ["1. Extract Keyframe Prompts", "2. Riwayat Projek"])
 
 # =====================================================================
-# FEATURE 1: EXTRACT KEYFRAME PROMPTS (THE "OPSI B" FLOW)
+# MAIN ENGINE: AUTO-STORYBOARD EXTRACTOR
 # =====================================================================
-if menu == "1. Extract Keyframe Prompts":
-    st.header("⚡ Keyframe Prompt Extractor")
-    st.subheader("Bongkar Video Menjadi Prompt Awal (Mulai) & Akhir Untuk Tools AI Video")
-    
-    # Frictionless Entry: Tabs for Link vs Upload
-    tab1, tab2 = st.tabs(["🔗 Tempel Link Video (Frictionless)", "📤 Unggah File Video"])
-    
-    video_source = None
-    
-    with tab1:
-        video_url = st.text_input("Masukkan URL Video (TikTok / Instagram Reels / YouTube Shorts):", 
-                                 placeholder="https://www.tiktok.com/@viral_user/video/...")
-        if video_url:
-            video_source = video_url
-            st.success("✅ Link berhasil dikunci! Sistem siap melakukan rendering.")
-            
-    with tab2:
-        uploaded_file = st.file_uploader("Atau unggah file video referensi (MP4/MOV):", type=["mp4", "mov", "avi"])
-        if uploaded_file:
-            video_source = uploaded_file.name
-            st.success(f"✅ File {video_source} siap dianalisis.")
-            
-    st.markdown("---")
-    st.header("🎨 Cinematic Upscale Injector")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        visual_style = st.selectbox("Pilih Target Gaya Visual (Menentukan Kamera & Lensa):", list(CINEMA_DATABASE.keys()))
-    with col2:
-        motion_speed = st.selectbox("Intensitas Gerakan Kamera (Motion Layer):", ["Slow & Smooth (Cinematic)", "Dynamic & Fast (Action)", "Static (No Camera Move)"])
+st.header("⚡ The Pro Workflow: Auto-Storyboard Engine")
+st.subheader("Bongkar 1 Video Referensi Menjadi Narasi 3 Shot (Awal - Puncak - Akhir)")
 
-    if st.button("🚀 Ekstrak Struktur Prompt (Mulai ➔ Motion ➔ Akhir)"):
-        if not video_source:
-            st.error("❌ Silakan masukkan link video atau unggah file video terlebih dahulu.")
-        else:
-            with st.spinner("🎬 Mengunduh referensi & membedah struktur video menjadi Keyframe Awal dan Akhir..."):
-                time.sleep(2.5) # Simulasi processing time (downloading & extracting)
-                
-                # Mengambil data dari Kamus Sinematografi
-                config = CINEMA_DATABASE[visual_style]
-                base_cinema_injection = f"Shot on {config['camera']} with {config['lens']}. {config['lighting']}. {config['style']}."
-                
-                # Simulasi Hasil Ekstraksi AI Vision
-                start_scene = "Seorang pria berdiri di tengah jalanan kota yang kosong, menatap ke arah langit yang mendung."
-                end_scene = "Pria tersebut tersenyum tipis saat sinar matahari mulai menembus awan dan menyinari wajahnya."
-                action_desc = "Kamera perlahan melakukan push-in (mendekat) ke wajah pria tersebut, transisi cuaca dari mendung menjadi cerah."
-                
-                # Merangkai Prompt Akhir
-                prompt_start = f"IMAGE 1 (START FRAME):\n{start_scene} {base_cinema_injection}"
-                prompt_motion = f"VIDEO PROMPT (MOTION & ACTION):\n{action_desc} Camera movement: {motion_speed}."
-                prompt_end = f"IMAGE 2 (END FRAME):\n{end_scene} {base_cinema_injection}"
-                
-                # Potong kredit
-                st.session_state.credits -= 5
-                
-                st.success("✅ Ekstraksi Berhasil! Salin prompt di bawah ini ke Kling / Luma / Veo Anda.")
-                
-                # TAMPILAN OUTPUT TERSTRUKTUR
-                st.markdown("### 🟢 1. START FRAME (Gambar Awal)")
-                st.info("Gunakan prompt ini di fitur 'Text-to-Image' atau kolom 'Start Image' untuk membuat awalan video.")
-                st.code(prompt_start, language="text")
-                
-                st.markdown("### 🎥 2. MOTION & ACTION PROMPT")
-                st.info("Masukkan prompt ini di kolom 'Video Prompt' / 'Text-to-Video' untuk mengarahkan pergerakan AI.")
-                st.code(prompt_motion, language="text")
-                
-                st.markdown("### 🏁 3. END FRAME (Gambar Akhir / Opsional)")
-                st.info("Gunakan prompt ini jika tool AI Anda (seperti Luma Dream Machine) memiliki fitur 'End Frame'.")
-                st.code(prompt_end, language="text")
-                
-                # Simpan ke riwayat
-                st.session_state.history.append({
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "style": visual_style,
-                    "start": prompt_start,
-                    "motion": prompt_motion,
-                    "end": prompt_end
-                })
+uploaded_file = st.file_uploader("Unggah File Video Referensi (MP4/MOV):", type=["mp4", "mov", "avi"])
 
-# =====================================================================
-# FEATURE 2: PROJECT HISTORY
-# =====================================================================
-elif menu == "2. Riwayat Projek":
-    st.header("🗄️ Riwayat Ekstraksi Keyframe")
-    if not st.session_state.history:
-        st.info("Belum ada riwayat projek terdeteksi.")
+st.markdown("---")
+st.header("🎨 Cinematic Upscale Settings")
+col1, col2 = st.columns(2)
+with col1:
+    visual_style = st.selectbox("Pilih Target Gaya Visual:", list(CINEMA_DATABASE.keys()))
+with col2:
+    motion_speed = st.selectbox("Intensitas Gerakan Kamera (Motion):", ["Smooth & Cinematic", "Dynamic & Fast", "Slow Push-in"])
+
+if st.button("🚀 Ekstrak & Buat Storyboard (Live API)"):
+    if not gemini_api_key:
+        st.error("❌ Masukkan Gemini API Key di sidebar kiri terlebih dahulu.")
+    elif not uploaded_file:
+        st.error("❌ Unggah file video terlebih dahulu.")
     else:
-        for idx, item in enumerate(reversed(st.session_state.history)):
-            with st.expander(f"📁 Projek #{len(st.session_state.history) - idx} - {item['style']} ({item['timestamp']})"):
-                st.markdown("**START FRAME:**")
-                st.code(item['start'], language="text")
-                st.markdown("**MOTION:**")
-                st.code(item['motion'], language="text")
-                st.markdown("**END FRAME:**")
-                st.code(item['end'], language="text")
+        try:
+            genai.configure(api_key=gemini_api_key)
+            # Menggunakan model terbaru yang valid untuk mencegah 404 Error
+            model = genai.GenerativeModel('gemini-1.5-pro-latest') 
+            
+            with st.spinner("🎬 Mengunggah video ke AI Server & Merancang Storyboard... (Bisa memakan waktu 1-2 menit)"):
+                
+                # 1. Simpan file sementara
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+                    tmp_file.write(uploaded_file.read())
+                    tmp_path = tmp_file.name
+
+                # 2. Upload ke Gemini
+                video_file = genai.upload_file(path=tmp_path)
+                
+                # Tunggu proses processing di server Google
+                while video_file.state.name == "PROCESSING":
+                    time.sleep(2)
+                    video_file = genai.get_file(video_file.name)
+                
+                if video_file.state.name == "FAILED":
+                    raise Exception("Gagal memproses video di server AI.")
+
+                # 3. Master Prompt untuk Auto-Storyboard
+                system_prompt = f"""
+                Analyze this video clip. It is a single scene. I want to expand it into a 3-shot storytelling sequence for a video ad.
+                - Shot 1: The Setup/Problem (Before the uploaded scene).
+                - Shot 2: The Climax/Action (The exact scene uploaded).
+                - Shot 3: The Resolution/Ending (After the uploaded scene).
+                
+                For each shot, provide two things:
+                1. 'start_frame': A highly detailed image prompt describing the subject and background.
+                2. 'motion': The camera movement instruction.
+                
+                Output STRICTLY in JSON format like this:
+                {{
+                    "shot_1": {{"start_frame": "...", "motion": "..."}},
+                    "shot_2": {{"start_frame": "...", "motion": "..."}},
+                    "shot_3": {{"start_frame": "...", "motion": "..."}}
+                }}
+                """
+                
+                # 4. Generate Konten
+                response = model.generate_content([video_file, system_prompt])
+                
+                # 5. Bersihkan File & Parse JSON
+                genai.delete_file(video_file.name)
+                os.unlink(tmp_path)
+                
+                raw_json = response.text.replace("```json", "").replace("```", "").strip()
+                storyboard = json.loads(raw_json)
+                
+                # Kurangi kredit
+                st.session_state.credits -= 25
+                st.success("✅ Auto-Storyboard Berhasil Diciptakan!")
+                
+                base_cinema = CINEMA_DATABASE[visual_style]
+                
+                # 6. Tampilkan Hasil (Shot 1, 2, 3)
+                for shot_num in ["shot_1", "shot_2", "shot_3"]:
+                    shot_title = "🎬 SHOT 1: SETUP (AWAL/MASALAH)" if shot_num == "shot_1" else "🎬 SHOT 2: CLIMAX (PUNCAK/ADEGAN ASLI)" if shot_num == "shot_2" else "🎬 SHOT 3: RESOLUTION (AKHIR/SOLUSI)"
+                    
+                    st.markdown(f"<div class='shot-box'>", unsafe_allow_html=True)
+                    st.markdown(f"### {shot_title}")
+                    
+                    st.markdown("**🟢 START FRAME (Gunakan di Text-to-Image):**")
+                    st.code(f"{storyboard[shot_num]['start_frame']} {base_cinema}", language="text")
+                    
+                    st.markdown("**🎥 MOTION PROMPT (Gunakan di Luma/Kling/Veo):**")
+                    st.code(f"{storyboard[shot_num]['motion']} Style: {motion_speed}.", language="text")
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                st.info("💡 **TIPS PRO:** Generate foto untuk ketiga 'Start Frame' di atas, lalu masukkan foto-foto tersebut beserta 'Motion Prompt'-nya ke Veo/Kling untuk dirangkai menjadi video utuh!")
+
+        except Exception as e:
+            st.error(f"❌ Terjadi kesalahan Sistem API: {str(e)}")
