@@ -187,9 +187,9 @@ if menu == "1. Extract & Upscale Prompt":
                 
                 st.markdown("### ✍️ AI Direct-Response Script Generator (Bonus Layer)")
                 with st.expander("Lihat Struktur Naskah Video Pendek (PAS Framework)"):
-                    st.markdown(f"**🔴 HOOK (0-3 Detik):** *"{script_hook}"*")
-                    st.markdown(f"**🟡 PROBLEM & AGITATION:** *"{script_body}"*")
-                    st.markdown(f"**🟢 CALL TO ACTION (CTA):** *"{script_cta}"*")
+                    st.markdown(f'**🔴 HOOK (0-3 Detik):** *"{script_hook}"*')
+                    st.markdown(f'**🟡 PROBLEM & AGITATION:** *"{script_body}"*')
+                    st.markdown(f'**🟢 CALL TO ACTION (CTA):** *"{script_cta}"*')
 
 # =====================================================================
 # FEATURE 2: AUTOMATED VIDEO EXTENSION FLOW
