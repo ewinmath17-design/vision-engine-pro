@@ -41,7 +41,7 @@ st.markdown("""
         text-align: center;
     }
 </style>
-""", unsafe_with_html=True)
+""", unsafe_allow_html=True)
 
 # Initialize Session State
 if 'credits' not in st.session_state:
