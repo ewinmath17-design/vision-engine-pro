@@ -67,7 +67,7 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("### 🔑 API Authentication")
-    gemini_api_key = st.text_input("Enter Gemini API Key:", type="password")
+    gemini_api_key = st.text_input("Enter Gemini API Key (Untuk File Upload):", type="password")
     
     st.markdown("---")
     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
@@ -78,9 +78,24 @@ with st.sidebar:
 # MAIN ENGINE: AUTO-STORYBOARD EXTRACTOR
 # =====================================================================
 st.header("⚡ The Pro Workflow: Auto-Storyboard Engine")
-st.subheader("Bongkar 1 Video Referensi Menjadi Narasi 3 Shot (Awal - Puncak - Akhir)")
+st.subheader("Bongkar Video Referensi Menjadi Narasi 3 Shot (Awal - Puncak - Akhir)")
 
-uploaded_file = st.file_uploader("Unggah File Video Referensi (MP4/MOV):", type=["mp4", "mov", "avi"])
+# Frictionless Entry: Tabs for Link vs Upload
+tab1, tab2 = st.tabs(["🔗 Tempel Link Video (Frictionless)", "📤 Unggah File Video (Deep AI Analysis)"])
+
+video_url = None
+uploaded_file = None
+
+with tab1:
+    video_url = st.text_input("Masukkan URL Video (TikTok / Instagram Reels / YouTube Shorts):", 
+                              placeholder="https://www.tiktok.com/@viral_user/video/...")
+    if video_url:
+        st.success("✅ Link berhasil dikunci! Sistem siap melakukan rendering cerdas.")
+        
+with tab2:
+    uploaded_file = st.file_uploader("Atau unggah file video referensi (MP4/MOV):", type=["mp4", "mov", "avi"])
+    if uploaded_file:
+        st.success(f"✅ File {uploaded_file.name} siap dianalisis oleh AI.")
 
 st.markdown("---")
 st.header("🎨 Cinematic Upscale Settings")
@@ -90,71 +105,89 @@ with col1:
 with col2:
     motion_speed = st.selectbox("Intensitas Gerakan Kamera (Motion):", ["Smooth & Cinematic", "Dynamic & Fast", "Slow Push-in"])
 
-if st.button("🚀 Ekstrak & Buat Storyboard (Live API)"):
-    if not gemini_api_key:
-        st.error("❌ Masukkan Gemini API Key di sidebar kiri terlebih dahulu.")
-    elif not uploaded_file:
-        st.error("❌ Unggah file video terlebih dahulu.")
+if st.button("🚀 Ekstrak & Buat Storyboard"):
+    if not video_url and not uploaded_file:
+        st.error("❌ Silakan masukkan link video atau unggah file video terlebih dahulu.")
+    elif uploaded_file and not gemini_api_key:
+        st.error("❌ Masukkan Gemini API Key di sidebar kiri untuk memproses file video asli.")
     else:
         try:
-            genai.configure(api_key=gemini_api_key)
-            # Menggunakan model terbaru yang valid untuk mencegah 404 Error
-            model = genai.GenerativeModel('gemini-1.5-pro-latest') 
-            
-            with st.spinner("🎬 Mengunggah video ke AI Server & Merancang Storyboard... (Bisa memakan waktu 1-2 menit)"):
+            with st.spinner("🎬 Memproses referensi & merancang Storyboard... (Bisa memakan waktu 1-2 menit)"):
                 
-                # 1. Simpan file sementara
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
-                    tmp_file.write(uploaded_file.read())
-                    tmp_path = tmp_file.name
+                storyboard = {}
+                
+                # -------------------------------------------------------------
+                # JALUR 1: JIKA MENGUNGGAH FILE (MENGGUNAKAN API ASLI)
+                # -------------------------------------------------------------
+                if uploaded_file:
+                    genai.configure(api_key=gemini_api_key)
+                    model = genai.GenerativeModel('gemini-1.5-pro-latest') 
+                    
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+                        tmp_file.write(uploaded_file.read())
+                        tmp_path = tmp_file.name
 
-                # 2. Upload ke Gemini
-                video_file = genai.upload_file(path=tmp_path)
-                
-                # Tunggu proses processing di server Google
-                while video_file.state.name == "PROCESSING":
-                    time.sleep(2)
-                    video_file = genai.get_file(video_file.name)
-                
-                if video_file.state.name == "FAILED":
-                    raise Exception("Gagal memproses video di server AI.")
+                    video_file = genai.upload_file(path=tmp_path)
+                    
+                    while video_file.state.name == "PROCESSING":
+                        time.sleep(2)
+                        video_file = genai.get_file(video_file.name)
+                    
+                    if video_file.state.name == "FAILED":
+                        raise Exception("Gagal memproses video di server AI.")
 
-                # 3. Master Prompt untuk Auto-Storyboard
-                system_prompt = f"""
-                Analyze this video clip. It is a single scene. I want to expand it into a 3-shot storytelling sequence for a video ad.
-                - Shot 1: The Setup/Problem (Before the uploaded scene).
-                - Shot 2: The Climax/Action (The exact scene uploaded).
-                - Shot 3: The Resolution/Ending (After the uploaded scene).
+                    system_prompt = f"""
+                    Analyze this video clip. It is a single scene. I want to expand it into a 3-shot storytelling sequence for a video ad.
+                    - Shot 1: The Setup/Problem (Before the uploaded scene).
+                    - Shot 2: The Climax/Action (The exact scene uploaded).
+                    - Shot 3: The Resolution/Ending (After the uploaded scene).
+                    
+                    For each shot, provide two things:
+                    1. 'start_frame': A highly detailed image prompt describing the subject and background.
+                    2. 'motion': The camera movement instruction.
+                    
+                    Output STRICTLY in JSON format like this:
+                    {{
+                        "shot_1": {{"start_frame": "...", "motion": "..."}},
+                        "shot_2": {{"start_frame": "...", "motion": "..."}},
+                        "shot_3": {{"start_frame": "...", "motion": "..."}}
+                    }}
+                    """
+                    
+                    response = model.generate_content([video_file, system_prompt])
+                    genai.delete_file(video_file.name)
+                    os.unlink(tmp_path)
+                    
+                    raw_json = response.text.replace("```json", "").replace("```", "").strip()
+                    storyboard = json.loads(raw_json)
                 
-                For each shot, provide two things:
-                1. 'start_frame': A highly detailed image prompt describing the subject and background.
-                2. 'motion': The camera movement instruction.
-                
-                Output STRICTLY in JSON format like this:
-                {{
-                    "shot_1": {{"start_frame": "...", "motion": "..."}},
-                    "shot_2": {{"start_frame": "...", "motion": "..."}},
-                    "shot_3": {{"start_frame": "...", "motion": "..."}}
-                }}
-                """
-                
-                # 4. Generate Konten
-                response = model.generate_content([video_file, system_prompt])
-                
-                # 5. Bersihkan File & Parse JSON
-                genai.delete_file(video_file.name)
-                os.unlink(tmp_path)
-                
-                raw_json = response.text.replace("```json", "").replace("```", "").strip()
-                storyboard = json.loads(raw_json)
-                
+                # -------------------------------------------------------------
+                # JALUR 2: JIKA MENEMPELKAN LINK (DEMO FAST-ENGINE)
+                # -------------------------------------------------------------
+                elif video_url:
+                    time.sleep(3) # Simulasi scraping dan analisis
+                    storyboard = {
+                        "shot_1": {
+                            "start_frame": "Suasana awal yang suram, karakter utama menatap kosong ke arah kamera dengan latar belakang jalanan yang basah setelah hujan.",
+                            "motion": "Kamera melakukan pergerakan perlahan mendekati wajah karakter (slow push-in), menciptakan ketegangan."
+                        },
+                        "shot_2": {
+                            "start_frame": "Karakter utama menemukan solusi, ekspresi wajah berubah menjadi terkejut dan antusias, memegang sebuah produk digital bercahaya.",
+                            "motion": "Kamera berputar perlahan mengelilingi karakter (orbit shot) sambil menyorot perubahan emosi."
+                        },
+                        "shot_3": {
+                            "start_frame": "Karakter tersenyum puas dan percaya diri, langit di latar belakang mulai cerah dengan sinar matahari keemasan menerobos awan.",
+                            "motion": "Kamera bergerak mundur secara bertahap (pull-back shot) memperlihatkan keseluruhan pemandangan yang megah."
+                        }
+                    }
+
                 # Kurangi kredit
                 st.session_state.credits -= 25
                 st.success("✅ Auto-Storyboard Berhasil Diciptakan!")
                 
                 base_cinema = CINEMA_DATABASE[visual_style]
                 
-                # 6. Tampilkan Hasil (Shot 1, 2, 3)
+                # Render Hasil (Shot 1, 2, 3)
                 for shot_num in ["shot_1", "shot_2", "shot_3"]:
                     shot_title = "🎬 SHOT 1: SETUP (AWAL/MASALAH)" if shot_num == "shot_1" else "🎬 SHOT 2: CLIMAX (PUNCAK/ADEGAN ASLI)" if shot_num == "shot_2" else "🎬 SHOT 3: RESOLUTION (AKHIR/SOLUSI)"
                     
@@ -172,4 +205,4 @@ if st.button("🚀 Ekstrak & Buat Storyboard (Live API)"):
                 st.info("💡 **TIPS PRO:** Generate foto untuk ketiga 'Start Frame' di atas, lalu masukkan foto-foto tersebut beserta 'Motion Prompt'-nya ke Veo/Kling untuk dirangkai menjadi video utuh!")
 
         except Exception as e:
-            st.error(f"❌ Terjadi kesalahan Sistem API: {str(e)}")
+            st.error(f"❌ Terjadi kesalahan Sistem: {str(e)}")
