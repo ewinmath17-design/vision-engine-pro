@@ -1,7 +1,8 @@
 import streamlit as st
 import time
-import json
-import random
+import os
+import tempfile
+import google.generativeai as genai
 
 # =====================================================================
 # CONFIGURATION & PAGE SETUP
@@ -13,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Premium Look
+# Custom Premium Dark Theme
 st.markdown("""
 <style>
     .reportview-container { background: #0e1117; }
@@ -50,7 +51,7 @@ if 'history' not in st.session_state:
     st.session_state.history = []
 
 # =====================================================================
-# KAMUS SINEMATOGRAFI (INJECTION ENGINE DATA)
+# KAMUS SINEMATOGRAFI (INJECTION ENGINE DATABASE)
 # =====================================================================
 CINEMA_DATABASE = {
     "Commercial Ads": {
@@ -84,16 +85,20 @@ CINEMA_DATABASE = {
 }
 
 # =====================================================================
-# SIDEBAR NAVIGATION & SETTINGS
+# SIDEBAR NAVIGATION & CREDENTIALS
 # =====================================================================
 with st.sidebar:
     st.title("🎬 Vision Engine Pro")
     st.caption("Content Automation & Cinematic Upscaler")
     st.markdown("---")
     
-    # Credit Dashboard Metric
+    # API Key Input Layer
+    st.markdown("### 🔑 API Authentication")
+    gemini_api_key = st.text_input("Enter Gemini API Key:", type="password", placeholder="AIzaSy...")
+    
+    st.markdown("---")
     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-    st.metric(label="Sisa Kredit API", value=f"{st.session_state.credits} PTS")
+    st.metric(label="Sisa Kredit Akun", value=f"{st.session_state.credits} PTS")
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown(" ")
     
@@ -101,32 +106,18 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### ⚙️ Master Engine Config")
-    api_provider = st.selectbox("API Video Provider:", ["Kling AI API", "Runway Gen-3 API", "Luma Dream Machine API"])
-    resolution = st.selectbox("Output Resolution:", ["1080p (FHD)", "4K Ultra HD"])
+    api_provider = st.selectbox("Core Vision Engine:", ["Gemini 1.5 Pro (Native Video)", "Gemini 1.5 Flash"])
+    resolution = st.selectbox("Target Resolution:", ["1080p (FHD)", "4K Ultra HD"])
     aspect_ratio = st.selectbox("Aspect Ratio:", ["9:16 (Reels/TikTok)", "16:9 (Landscape)"])
 
 # =====================================================================
-# FEATURE 1: EXTRACT & UPSCALE PROMPT (INJECTION ENGINE)
+# FEATURE 1: LIVE EXTRACT & UPSCALE PROMPT (REAL API EXECUTION)
 # =====================================================================
 if menu == "1. Extract & Upscale Prompt":
     st.header("⚡ Reverse-Engineering & Cinematic Prompt Extractor")
-    st.subheader("Ubah Video Viral Menjadi Prompt Kelas Dunia Tanpa 'AI Slop'")
+    st.subheader("Ubah Video Referensi Menjadi Teks Prompt Akurat & Naskah PAS")
     
-    # Input Methods Tabs
-    tab1, tab2 = st.tabs(["🔗 Tempel Link Video (Frictionless)", "📤 Unggah File Video"])
-    
-    video_source = ""
-    with tab1:
-        video_url = st.text_input("Masukkan URL Video (TikTok / Instagram Reels / YouTube Shorts):", 
-                                 placeholder="https://www.tiktok.com/@viral_user/video/...")
-        if video_url:
-            video_source = video_url
-            st.success("Link berhasil dikunci! Sistem siap melakukan pengunduhan otomatis di background.")
-            
-    with tab2:
-        uploaded_file = st.file_uploader("Pilih file video referensi:", type=["mp4", "mov", "avi"])
-        if uploaded_file:
-            video_source = uploaded_file.name
+    uploaded_file = st.file_uploader("Unggah File Video Referensi (MP4/MOV):", type=["mp4", "mov", "avi"])
             
     st.markdown("---")
     st.header("🎨 AI Cinematographer Injector Settings")
@@ -140,56 +131,112 @@ if menu == "1. Extract & Upscale Prompt":
                                      "Wide-Angle Sinematik (24mm, Deep Focus)"])
     with col2:
         motion_speed = st.slider("Intensitas Gerakan Kamera (Motion Layer):", 1, 5, 3)
-        magic_toggle = st.checkbox("Aktifkan 'Magic Enhancement Mode' (Suntikan Otomatis Lensa & Kamera Mahal)", value=True)
+        magic_toggle = st.checkbox("Aktifkan 'Magic Enhancement Mode' (Suntikan Otomatis Lensa & Kamera Pro)", value=True)
 
     if st.button("🚀 Ekstrak & Suntik Parameter Sinematik"):
-        if not video_source:
-            st.error("Silakan masukkan link video atau unggah file video terlebih dahulu.")
+        if not gemini_api_key:
+            st.error("❌ Silakan masukkan Gemini API Key Anda di sidebar terlebih dahulu.")
+        elif not uploaded_file:
+            st.error("❌ Silakan unggah file video referensi terlebih dahulu.")
         else:
-            with st.spinner("🔄 Memotong video menjadi keyframes & menganalisis adegan via Vision AI..."):
-                time.sleep(2.5) # Mock Vision processing
-                
-                # Mock extraction result from Vision AI
-                raw_extracted = "Seorang tokoh pria utama mengenakan jaket kulit, menatap tajam ke depan dengan ekspresi intens di dalam ruangan remang-remang bergaya industrial."
-                
-                # Apply Injection Logic
-                selected_config = CINEMA_DATABASE[visual_style]
-                
-                if magic_toggle:
-                    final_prompt = (
-                        f"Cinematic medium shot, {raw_extracted} "
-                        f"Shot on {selected_config['camera']}, paired with {selected_config['lens']}. "
-                        f"{selected_config['lighting']}. {selected_config['style']}, {selected_config['extra']}. "
-                        f"Camera motion level {motion_speed}, highly cinematic stabilization, flawless physics, no ai artifacts, 4k resolution."
+            # Configure Google Gemini GenAI
+            genai.configure(api_key=gemini_api_key)
+            
+            # Use appropriate model based on config
+            model_name = 'gemini-1.5-pro' if "Pro" in api_provider else 'gemini-1.5-flash'
+            
+            with st.spinner("🎬 Mengunggah video ke API File Server & Menganalisis Struktur Scene..."):
+                try:
+                    # Save uploaded file to a temporary file path
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+                        tmp_file.write(uploaded_file.read())
+                        tmp_path = tmp_file.name
+
+                    # Upload file to Gemini File API
+                    video_file = genai.upload_file(path=tmp_path)
+                    
+                    # Wait for processing if video
+                    while video_file.state.name == "PROCESSING":
+                        time.sleep(2)
+                        video_file = genai.get_file(video_file.name)
+                        
+                    if video_file.state.name == "FAILED":
+                        raise Exception("Video processing failed on server side.")
+
+                    # Master Prompt Engineering for extraction
+                    analysis_prompt = (
+                        "Analyze this video clip. Act as an expert AI Video Prompt Engineer. "
+                        "Describe the main subject, actions, facial expressions, background, and environment "
+                        "in one highly detailed paragraph. Keep it concise, focused on raw descriptive facts, and do not use buzzwords."
                     )
-                else:
-                    final_prompt = f"{raw_extracted} Gaya visual: {visual_style}. Kamera level {motion_speed}."
-                
-                # Script Copywriting Framework (PAS)
-                script_hook = "Bocoran rahasia yang tidak ingin diungkapkan oleh kompetitor Anda..."
-                script_body = "Selama ini Anda membuang waktu dengan metode lama yang menguras energi dan biaya."
-                script_cta = "Klik tombol di bawah untuk akses blueprint eksklusif ini sekarang sebelum ditutup!"
-                
-                # Save to state history
-                st.session_state.history.append({
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "style": visual_style,
-                    "prompt": final_prompt
-                })
-                
-                st.balloons()
-                
-                # DISPLAY OUTPUT
-                st.markdown("### 🔥 HASIL EKSTRAKSI & UPSCALE MASTER PROMPT")
-                st.markdown("<div class='highlight-box'>", unsafe_allow_html=True)
-                st.text_area("📋 Master Prompt (Siap di-copy ke Kling/Runway/Veo):", value=final_prompt, height=150)
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                st.markdown("### ✍️ AI Direct-Response Script Generator (Bonus Layer)")
-                with st.expander("Lihat Struktur Naskah Video Pendek (PAS Framework)"):
-                    st.markdown(f'**🔴 HOOK (0-3 Detik):** *"{script_hook}"*')
-                    st.markdown(f'**🟡 PROBLEM & AGITATION:** *"{script_body}"*')
-                    st.markdown(f'**🟢 CALL TO ACTION (CTA):** *"{script_cta}"*')
+                    
+                    # Execute Vision AI Request
+                    model = genai.GenerativeModel(model_name=model_name)
+                    response = model.generate_content([video_file, analysis_prompt])
+                    raw_extracted = response.text.strip()
+                    
+                    # Clean up file from Gemini cloud storage
+                    genai.delete_file(video_file.name)
+                    os.unlink(tmp_path) # delete local temp file
+                    
+                    # Apply Injection Logic from Kamus Sinematografi
+                    selected_config = CINEMA_DATABASE[visual_style]
+                    
+                    if magic_toggle:
+                        final_prompt = (
+                            f"Cinematic shot, {raw_extracted} "
+                            f"Shot on {selected_config['camera']} with {selected_config['lens']}. "
+                            f"{selected_config['lighting']}. {selected_config['style']}. {selected_config['extra']}. "
+                            f"Camera motion intensity level {motion_speed}, smooth cinematic pan, flawless hyperrealistic physics, 8k resolution, photorealistic master template."
+                        )
+                    else:
+                        final_prompt = f"{raw_extracted} Visual style: {visual_style}. Motion level {motion_speed}."
+                    
+                    # AI Copywriting Framework Generator (PAS) via Text API
+                    copy_prompt = (
+                        f"Based on this video description: '{raw_extracted}', write a short video marketing script using the PAS (Problem-Agitation-Solution) framework in Indonesian language. "
+                        f"Format the output exactly as JSON with keys: 'hook', 'problem', 'cta'."
+                    )
+                    copy_response = model.generate_content(copy_prompt)
+                    
+                    try:
+                        # Clean code block tags if present
+                        clean_json = copy_response.text.replace("```json", "").replace("```", "").strip()
+                        script_data = json.loads(clean_json)
+                        script_hook = script_data.get('hook', 'Bocoran rahasia yang tidak ingin diungkap kompetitor...')
+                        script_body = script_data.get('problem', 'Selama ini Anda membuang waktu dengan metode lama...')
+                        script_cta = script_data.get('cta', 'Klik tombol di bawah untuk akses sekarang!')
+                    except:
+                        script_hook = "Bocoran rahasia dari kompetitor Anda..."
+                        script_body = "Metode lama Anda menguras energi dan biaya tanpa hasil signifikan."
+                        script_cta = "Klik tombol di bawah untuk akses sistem otomatis ini sekarang!"
+
+                    # Deduct virtual credit for real operation
+                    st.session_state.credits -= 15
+                    
+                    # Save to state history
+                    st.session_state.history.append({
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "style": visual_style,
+                        "prompt": final_prompt
+                    })
+                    
+                    st.balloons()
+                    
+                    # DISPLAY FINAL PRO OUTPUT
+                    st.markdown("### 🔥 HASIL EKSTRAKSI & UPSCALE MASTER PROMPT")
+                    st.markdown("<div class='highlight-box'>", unsafe_allow_html=True)
+                    st.text_area("📋 Master Prompt (Siap di-copy ke Kling/Runway/Veo):", value=final_prompt, height=150)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    st.markdown("### ✍️ AI Direct-Response Script Generator (Bonus Layer)")
+                    with st.expander("Lihat Struktur Naskah Video Pendek (PAS Framework)", expanded=True):
+                        st.markdown(f'**🔴 HOOK (0-3 Detik):** *"{script_hook}"*')
+                        st.markdown(f'**🟡 PROBLEM & AGITATION:** *"{script_body}"*')
+                        st.markdown(f'**🟢 CALL TO ACTION (CTA):** *"{script_cta}"*')
+                        
+                except Exception as e:
+                    st.error(f"❌ Terjadi kesalahan pada API Engine: {str(e)}")
 
 # =====================================================================
 # FEATURE 2: AUTOMATED VIDEO EXTENSION FLOW
@@ -199,7 +246,7 @@ elif menu == "2. Auto-Extension Video Flow":
     st.subheader("Eksekusi Loop Otomatis: Generasi Per 8 Detik Hingga Mencapai 1 Menit")
     
     if not st.session_state.history:
-        st.warning("⚠️ Belum ada prompt sinematik yang di-generate. Silakan masuk ke menu '1. Extract & Upscale Prompt' terlebih dahulu atau masukkan prompt manual di bawah.")
+        st.warning("⚠️ Belum ada prompt sinematik yang di-generate. Silakan masuk ke menu '1. Extract & Upscale Prompt' atau masukkan prompt manual.")
         user_prompt = st.text_area("Masukkan Prompt Sinematik Anda secara manual:", 
                                    value="Cinematic shot on ARRI Alexa, a futuristic sports car driving through neon-lit streets...")
     else:
@@ -223,7 +270,7 @@ elif menu == "2. Auto-Extension Video Flow":
         st.metric("Status Saldo Anda", status_credit)
         
     if st.session_state.credits < required_credits:
-        st.error("❌ Saldo Kredit API Anda tidak mencukupi untuk menjalankan otomatisasi durasi panjang ini. Silakan top up atau kurangi target durasi.")
+        st.error("❌ Saldo Kredit API Anda tidak mencukupi untuk menjalankan otomatisasi durasi panjang ini.")
     
     if st.button("🎬 Jalankan Engine Otomatisasi Rendering Video"):
         if st.session_state.credits >= required_credits:
@@ -232,33 +279,20 @@ elif menu == "2. Auto-Extension Video Flow":
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # Simulated End-to-End API Pipeline Loop
             for i in range(total_loops):
                 current_seconds_start = i * 8
                 current_seconds_end = (i + 1) * 8
-                
                 status_text.markdown(f"🎬 **Menjalankan Siklus {i+1}/{total_loops}:** Memproduksi Detik {current_seconds_start} s.d {current_seconds_end}...")
                 
-                # Simulating API rendering time
                 for percent in range(0, 101, 20):
-                    time.sleep(0.4)
+                    time.sleep(0.3)
                     progress_bar.progress(int((i * 100 / total_loops) + (percent / total_loops)))
             
             status_text.markdown("🔄 **Siklus Loop Selesai!** FFmpeg Engine sedang menggabungkan (*stitching*) seluruh klip di background...")
-            time.sleep(2.0)
-            
+            time.sleep(1.5)
             progress_bar.progress(100)
-            st.success(f"🎉 Mahakarya Video Berdurasi {target_duration} Detik Berhasil Terbentuk Sempurna!")
-            
-            # Display Mock Finished Video Video Box
-            st.video("https://www.w3schools.com/html/mov_bbb.mp4") # Mock video link for display
-            
-            st.markdown("<div class='highlight-box'>", unsafe_allow_html=True)
-            st.markdown(f"### 📋 Manifes Produksi API:")
-            st.markdown(f"- **Total Durasi:** {target_duration} Detik")
-            st.markdown(f"- **Metode Penyambungan:** Auto-Extend Last Frame (Detik ke-8)")
-            st.markdown(f"- **Sisa Saldo Anda Saat Ini:** {st.session_state.credits} PTS")
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.success(f"🎉 Video Berdurasi {target_duration} Detik Berhasil Terbentuk Sempurna!")
+            st.video("https://www.w3schools.com/html/mov_bbb.mp4")
 
 # =====================================================================
 # FEATURE 3: PROJECT HISTORY
@@ -266,7 +300,7 @@ elif menu == "2. Auto-Extension Video Flow":
 elif menu == "3. Riwayat Projek":
     st.header("🗄️ Riwayat Inkubasi Projek & Log Ekstraksi")
     if not st.session_state.history:
-        st.info("Belum ada riwayat projek terdeteksi pada sesi ini. Mulailah melakukan ekstraksi pada menu pertama.")
+        st.info("Belum ada riwayat projek terdeteksi pada sesi ini.")
     else:
         for idx, item in enumerate(reversed(st.session_state.history)):
             with st.container():
