@@ -92,9 +92,9 @@ with st.sidebar:
     st.markdown("---")
     
     # Credit Dashboard Metric
-    st.markdown("<div class='metric-card'>", unsafe_with_html=True)
+    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
     st.metric(label="Sisa Kredit API", value=f"{st.session_state.credits} PTS")
-    st.markdown("</div>", unsafe_with_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown(" ")
     
     menu = st.radio("Navigasi Fitur:", ["1. Extract & Upscale Prompt", "2. Auto-Extension Video Flow", "3. Riwayat Projek"])
@@ -181,9 +181,9 @@ if menu == "1. Extract & Upscale Prompt":
                 
                 # DISPLAY OUTPUT
                 st.markdown("### 🔥 HASIL EKSTRAKSI & UPSCALE MASTER PROMPT")
-                st.markdown("<div class='highlight-box'>", unsafe_with_html=True)
+                st.markdown("<div class='highlight-box'>", unsafe_allow_html=True)
                 st.text_area("📋 Master Prompt (Siap di-copy ke Kling/Runway/Veo):", value=final_prompt, height=150)
-                st.markdown("</div>", unsafe_with_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
                 
                 st.markdown("### ✍️ AI Direct-Response Script Generator (Bonus Layer)")
                 with st.expander("Lihat Struktur Naskah Video Pendek (PAS Framework)"):
@@ -253,12 +253,12 @@ elif menu == "2. Auto-Extension Video Flow":
             # Display Mock Finished Video Video Box
             st.video("https://www.w3schools.com/html/mov_bbb.mp4") # Mock video link for display
             
-            st.markdown("<div class='highlight-box'>", unsafe_with_html=True)
+            st.markdown("<div class='highlight-box'>", unsafe_allow_html=True)
             st.markdown(f"### 📋 Manifes Produksi API:")
             st.markdown(f"- **Total Durasi:** {target_duration} Detik")
             st.markdown(f"- **Metode Penyambungan:** Auto-Extend Last Frame (Detik ke-8)")
             st.markdown(f"- **Sisa Saldo Anda Saat Ini:** {st.session_state.credits} PTS")
-            st.markdown("</div>", unsafe_with_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 # =====================================================================
 # FEATURE 3: PROJECT HISTORY
