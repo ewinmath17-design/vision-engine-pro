@@ -143,7 +143,7 @@ if menu == "1. Extract & Upscale Prompt":
             genai.configure(api_key=gemini_api_key)
             
             # Use appropriate model based on config
-            model_name = 'gemini-1.5-pro-latest' if "Pro" in api_provider else 'gemini-1.5-flash'
+            model_name = 'gemini-1.5-pro-latest' if "Pro" in api_provider else 'gemini-1.5-flash-latest'
             
             with st.spinner("🎬 Mengunggah video ke API File Server & Menganalisis Struktur Scene..."):
                 try:
